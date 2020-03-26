@@ -9,39 +9,28 @@ from IPython.display import Image
 plt.style.use('seaborn-poster')
 matplotlib.rcParams['figure.figsize'] = (10., 6.)
 
-url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Confirmed.csv"
+url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv"
 cases = pd.read_csv(url)
-url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Recovered.csv"
+url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_recovered_global.csv"
 recovered = pd.read_csv(url)
-url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Deaths.csv"
+url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv"
 deaths = pd.read_csv(url)
-today = cases.columns[-1]
+today = recovered.columns[-1]
 days = pd.date_range(start='1/22/20',end=today)
 dd = np.arange(len(days))
 
 def load_cases(region):
-    if region == 'World':
-        rows = list(range(len(cases.index)))
-    elif region == 'US':
-        tophalf = cases.iloc[:200]  # In lower part of file, duplicate data is given for cities
-        rows = tophalf['Country/Region'].isin([region])
-    elif region in ['Hubei']:
+    if region in ['Hubei', 'New York']:
         rows = cases['Province/State'].isin([region])
     else:
         rows = cases['Country/Region'].isin([region])
         
-    if region == 'US':
-        total_cases = [cases.iloc[:200][day.strftime('%-m/%-d/%y')][rows].sum() for day in days]
-        total_recovered = [recovered.iloc[:200][day.strftime('%-m/%-d/%y')][rows].sum() for day in days]
-        total_deaths = [deaths.iloc[:200][day.strftime('%-m/%-d/%y')][rows].sum() for day in days]        
-    else:
-        total_cases = [cases[day.strftime('%-m/%-d/%y')][rows].sum() for day in days]
-        total_recovered = [recovered[day.strftime('%-m/%-d/%y')][rows].sum() for day in days]
-        total_deaths = [deaths[day.strftime('%-m/%-d/%y')][rows].sum() for day in days]
+    total_cases = [cases[day.strftime('%-m/%-d/%y')][rows].sum() for day in days]
+    total_recovered = [recovered[day.strftime('%-m/%-d/%Y')][rows].sum() for day in days]
+    total_deaths = [deaths[day.strftime('%-m/%-d/%y')][rows].sum() for day in days]
     return np.array(total_cases), np.array(total_recovered), np.array(total_deaths)
 
 population = {
-    'World' : 7.77e9,
     'Austria': 8.822e6,
     'France': 66.99e6,
     'Germany': 82.79e6,
@@ -54,7 +43,7 @@ population = {
     'US' : 372.2e6    
 }
 
-def SIR_mitigated(region='world', start_date=today, beta=0.25, gamma=0.05,\
+def SIR_mitigated(region='Italy', start_date=today, beta=0.25, gamma=0.05,\
                   confirmed=25, critical=10, fatal=2,
                   use_mitigation=False,
                   mitigation_factor=0.5, mitigation_interval=[0,180],
@@ -135,7 +124,7 @@ widget_layout = Layout(display='flex',
                        flex_flow='row',
                        justify_content='space-between')
 
-region_w = widgets.Dropdown(options=population.keys(),value='World',description='Region to model:',style=mystyle)
+region_w = widgets.Dropdown(options=population.keys(),value='Italy',description='Region to model:',style=mystyle)
 beta_w = widgets.FloatSlider(min=0.01,max=0.5,step=0.01,value=0.25,description=r'$\beta$ (rate of contact)',style=mystyle)
 gamma_w = widgets.FloatSlider(min=0.01,max=0.5,step=0.01,value=0.05,description=r'$\gamma$ (rate of recovery)',style=mystyle)
 critical_w = widgets.FloatSlider(min=0.01,max=100.,step=0.1,value=10.,
@@ -185,7 +174,7 @@ SIR_gui.set_title(0,'Model')
 SIR_gui.set_title(1,'Plotting')
 SIR_gui.set_title(2,'Statistics')
 
-def SIR_output(region='world', start_date=today, beta=0.25, gamma=0.05,\
+def SIR_output(region='Italy', start_date=today, beta=0.25, gamma=0.05,\
                   confirmed=25, critical=5, fatal=1, use_mitigation=False,
                   mitigation_factor=0.5, mitigation_interval=[0,180],
                   plotS=True,plotI=True,plotR=True,
