@@ -4,44 +4,36 @@ import matplotlib
 from ipywidgets import interact, widgets
 import matplotlib.dates as dates
 from scipy.integrate import solve_ivp
-import pandas as pd
 from IPython.display import Image
 plt.style.use('seaborn-poster')
 matplotlib.rcParams['figure.figsize'] = (10., 6.)
+from data import population, jhu_data, load_cases
 
-url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv"
-cases = pd.read_csv(url)
-url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_recovered_global.csv"
-recovered = pd.read_csv(url)
-url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv"
-deaths = pd.read_csv(url)
-today = recovered.columns[-1]
-days = pd.date_range(start='1/22/20',end=today)
-dd = np.arange(len(days))
+cases, deaths, today, days = jhu_data()
 
-def load_cases(region):
-    if region in ['Hubei', 'New York']:
-        rows = cases['Province/State'].isin([region])
-    else:
-        rows = cases['Country/Region'].isin([region])
-        
-    total_cases = [cases[day.strftime('%-m/%-d/%y')][rows].sum() for day in days]
-    total_recovered = [recovered[day.strftime('%-m/%-d/%Y')][rows].sum() for day in days]
-    total_deaths = [deaths[day.strftime('%-m/%-d/%y')][rows].sum() for day in days]
-    return np.array(total_cases), np.array(total_recovered), np.array(total_deaths)
+def compute_IR(total,gamma=0.05):
+    """Determine (active) infected and recovered from total (I+R) time series."""
+    n = len(total)
+    M = np.zeros((n,n))
+    for i in range(n):
+        M[i,i] = 1.0
+        for j in range(i):
+            M[i,j] = gamma
+    I = np.linalg.solve(M,total)
+    R = total-I
+    return I, R
 
-population = {
-    'Austria': 8.822e6,
-    'France': 66.99e6,
-    'Germany': 82.79e6,
-    'Korea, South': 51.47e6,
-    'Italy' : 60.48e6,
-    'Netherlands': 17.18e6,
-    'Spain' : 46.66e6,
-    'Switzerland': 8.57e6,
-    'United Kingdom': 66.44e6,
-    'US' : 372.2e6    
-}
+def compute_IR_delay(total,delay=20):
+    """Determine (active) infected and recovered from total (I+R) time series."""
+    n = len(total)
+    M = np.zeros((n,n))
+    for i in range(n):
+        M[i,i] = 1.0
+        for j in range(i-delay):
+            M[i,j] = 1.
+    I = np.linalg.solve(M,total)
+    R = total-I
+    return I, R
 
 def SIR_mitigated(region='Italy', start_date=today, beta=0.25, gamma=0.05,\
                   confirmed=25, critical=10, fatal=2,
@@ -51,8 +43,8 @@ def SIR_mitigated(region='Italy', start_date=today, beta=0.25, gamma=0.05,\
                   Axis='Linear'):
     """ Model the current outbreak using the SIR model."""
 
-    total_cases, total_recovered, total_deaths = load_cases(region)
-    active_confirmed = total_cases - total_recovered - total_deaths
+    total_cases, total_deaths = load_cases(region)
+    active_confirmed, total_recovered = compute_IR(total_cases)
     confirmed_fraction = confirmed/100.
     N = population[region]
     
@@ -70,8 +62,8 @@ def SIR_mitigated(region='Italy', start_date=today, beta=0.25, gamma=0.05,\
         return du
 
     # Initial values
-    u0[2] = (total_recovered[-1]+total_deaths[-1])/confirmed_fraction  # Initial recovered
-    u0[1] = active_confirmed[-1]/confirmed_fraction-u0[2] # Initial infected
+    u0[2] = total_recovered[-1]/confirmed_fraction  # Initial recovered
+    u0[1] = active_confirmed[-1]/confirmed_fraction # Initial infected
     u0[0] = N - u0[1] - u0[2]
 
     T = 400
