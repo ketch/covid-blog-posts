@@ -5,6 +5,7 @@ from scipy.integrate import solve_ivp
 import matplotlib.dates as mdates
 import data
 import json
+from scipy import optimize
 
 
 class NumpyEncoder(json.JSONEncoder):
@@ -81,13 +82,13 @@ def infer_initial_data(total_deaths,data_start,ifr,gamma,N):
     return u0, mttd, inferred_data_dates, total_deaths
 
 
-def forecast(u0,mttd,N,inferred_data_dates,total_deaths,ifr=0.01,beta=0.25,gamma=0.04,q=1.0,intervention_start=0,
+def forecast(u0,lag,N,inferred_data_dates,total_deaths,ifr=0.01,beta=0.25,gamma=0.04,q=1.0,intervention_start=0,
              intervention_length=30,forecast_length=14,compute_interval=True):
     """Forecast with SIR model.  All times are in days.
 
         Inputs:
          - ifr: infection fatality ratio
-         - mttd: mean time to death
+         - lag: difference (in days) between today and simulation start
          - intervention_level: one of 'No action', 'Limited action', 'Social distancing',
                 'Shelter in place', or 'Full lockdown'.
          - intervention_start: when intervention measure starts, relative to today (can be negative)
@@ -96,24 +97,24 @@ def forecast(u0,mttd,N,inferred_data_dates,total_deaths,ifr=0.01,beta=0.25,gamma
 
     
     # Now run the model
-    S_mean, I_mean, R_mean = SIR(u0, beta=beta, gamma=gamma, N=N, T=mttd+forecast_length, q=q,
-                                 intervention_start=intervention_start+mttd,
+    S_mean, I_mean, R_mean = SIR(u0, beta=beta, gamma=gamma, N=N, T=lag+forecast_length, q=q,
+                                 intervention_start=intervention_start+lag,
                                  intervention_length=intervention_length)
     
     S_low, I_low, R_low = S_mean.copy(), I_mean.copy(), R_mean.copy()
     S_high, I_high, R_high = S_mean.copy(), I_mean.copy(), R_mean.copy()
     dd_low = np.diff(R_mean); dd_high = np.diff(R_mean)
 
-    prediction_dates = inferred_data_dates[-(mttd+1)]+range(forecast_length+mttd+1)
+    prediction_dates = inferred_data_dates[-(lag+1)]+range(forecast_length+lag+1)
     pred_cumu_deaths = R_mean*ifr
-    pred_cumu_deaths = pred_cumu_deaths - (pred_cumu_deaths[mttd]-total_deaths[-1])
+    pred_cumu_deaths = pred_cumu_deaths - (pred_cumu_deaths[lag]-total_deaths[-1])
 
     if compute_interval:
         pred_daily_deaths_low = np.diff(R_mean); pred_daily_deaths_high = np.diff(R_mean)
         for dbeta in np.linspace(-0.05,0.1,6):
             for dgamma in np.linspace(-0.02,0.08,6):
-                S, I, R= SIR(u0, beta=beta+dbeta, gamma=gamma+dgamma, N=N, T=mttd+forecast_length, q=q,
-                             intervention_start=intervention_start+mttd,
+                S, I, R= SIR(u0, beta=beta+dbeta, gamma=gamma+dgamma, N=N, T=lag+forecast_length, q=q,
+                             intervention_start=intervention_start+lag,
                              intervention_length=intervention_length)
 
                 S_low = np.minimum(S_low,S)
@@ -126,9 +127,9 @@ def forecast(u0,mttd,N,inferred_data_dates,total_deaths,ifr=0.01,beta=0.25,gamma
                 pred_daily_deaths_high = np.maximum(pred_daily_deaths_high,np.diff(R))
      
         pred_cumu_deaths_low  = R_low*ifr
-        pred_cumu_deaths_low = pred_cumu_deaths_low - (pred_cumu_deaths_low[mttd]-total_deaths[-1])
+        pred_cumu_deaths_low = pred_cumu_deaths_low - (pred_cumu_deaths_low[lag]-total_deaths[-1])
         pred_cumu_deaths_high = R_high*ifr
-        pred_cumu_deaths_high = pred_cumu_deaths_high - (pred_cumu_deaths_high[mttd]-total_deaths[-1])
+        pred_cumu_deaths_high = pred_cumu_deaths_high - (pred_cumu_deaths_high[lag]-total_deaths[-1])
 
         pred_daily_deaths_low = pred_daily_deaths_low*ifr; pred_daily_deaths_high = pred_daily_deaths_high*ifr
 
@@ -137,7 +138,7 @@ def forecast(u0,mttd,N,inferred_data_dates,total_deaths,ifr=0.01,beta=0.25,gamma
         return prediction_dates, pred_cumu_deaths, None, None, None, None
 
 
-def plot_forecast(inferred_data_dates, total_deaths, mttd, prediction_dates, pred_cumu_deaths, pred_cumu_deaths_low,
+def plot_forecast(inferred_data_dates, total_deaths, lag, prediction_dates, pred_cumu_deaths, pred_cumu_deaths_low,
                   pred_cumu_deaths_high, pred_daily_deaths_low, pred_daily_deaths_high, plot_title,
                   plot_past_pred=True, plot_type='cumulative',
                   plot_interval=True, plot_value='deaths',scale='linear'):
@@ -148,28 +149,28 @@ def plot_forecast(inferred_data_dates, total_deaths, mttd, prediction_dates, pre
         plotfun = plt.semilogy
         
     if plot_past_pred: pred_start_ind=0
-    else: pred_start_ind = mttd
+    else: pred_start_ind = lag
 
     if plot_type=='cumulative':
         if plot_value == 'deaths':
             plotfun(inferred_data_dates,total_deaths,'-',lw=3,label='Deaths (recorded)')
             plotfun(prediction_dates[pred_start_ind:],pred_cumu_deaths[pred_start_ind:],'-k',label='Deaths (predicted)')
             if plot_interval:
-                plt.fill_between(prediction_dates[mttd:],pred_cumu_deaths_low[mttd:],pred_cumu_deaths_high[mttd:],color='grey',zorder=-1)
+                plt.fill_between(prediction_dates[lag:],pred_cumu_deaths_low[lag:],pred_cumu_deaths_high[lag:],color='grey',zorder=-1)
         elif plot_value == 'hospitalizations':
-            plotfun(prediction_dates[mttd:],pred_cumu_deaths[mttd:]*hr,'-k',label='Hospitalizations (predicted)')
+            plotfun(prediction_dates[lag:],pred_cumu_deaths[lag:]*hr,'-k',label='Hospitalizations (predicted)')
             if plot_interval:
-                plt.fill_between(prediction_dates[mttd:],pred_cumu_deaths_low[mttd:]*hr,pred_cumu_deaths_high[mttd:]*hr,color='grey',zorder=-1)
+                plt.fill_between(prediction_dates[lag:],pred_cumu_deaths_low[lag:]*hr,pred_cumu_deaths_high[lag:]*hr,color='grey',zorder=-1)
     elif plot_type=='daily':
         if plot_value == 'deaths':
             plotfun(inferred_data_dates[1:],np.diff(total_deaths),'-',lw=3,label='Deaths (recorded)')
             plotfun(prediction_dates[pred_start_ind+1:],np.diff(pred_cumu_deaths[pred_start_ind:]),'-k',label='Deaths (predicted)')
             if plot_interval:
-                plt.fill_between(prediction_dates[mttd+1:],dd_low[mttd:],dd_high[mttd:],color='grey',zorder=-1)
+                plt.fill_between(prediction_dates[lag+1:],dd_low[lag:],dd_high[lag:],color='grey',zorder=-1)
         elif plot_value == 'hospitalizations':
-            plotfun(prediction_dates[mttd+1:],np.diff(pred_cumu_deaths[mttd:])*hr,'-k',label='Hospitalizations (predicted)')
+            plotfun(prediction_dates[lag+1:],np.diff(pred_cumu_deaths[lag:])*hr,'-k',label='Hospitalizations (predicted)')
             if plot_interval:
-                plt.fill_between(prediction_dates[mttd+1:],dd_low[mttd:]*hr,dd_high[mttd:]*hr,color='grey',zorder=-1)
+                plt.fill_between(prediction_dates[lag+1:],dd_low[lag:]*hr,dd_high[lag:]*hr,color='grey',zorder=-1)
 
     plt.legend(loc='best')
 
@@ -205,12 +206,12 @@ def compute_and_plot(region='Spain',ifr=1,beta=0.25,gamma=0.04,intervention_leve
                   plot_interval=plot_interval, plot_value=plot_value, scale=scale)
 
 
-def write_JSON(regions, forecast_length=14):
+def write_JSON(regions, forecast_length=14, print_estimates=False):
 
     output = {}
     ifr = 1/100
-    gamma = 0.05
-    beta = 0.25
+    gamma = 0.08
+    beta = 0.28
 
     for region in regions:
         
@@ -220,10 +221,19 @@ def write_JSON(regions, forecast_length=14):
         intervention_length=30
 
         N, total_deaths, data_start = retrieve_data(region)
+        if total_deaths[-1]<50: continue
 
         u0, mttd, inferred_data_dates, total_deaths = infer_initial_data(total_deaths,data_start,ifr,gamma,N)
 
-        q = data.intervention_strength[intervention_level]
+        q, q_interval = assess_intervention_effectiveness(region)
+
+        apparent_R = (1-q)*beta/gamma
+
+        q = min(q,1)
+        apparent_R = max(apparent_R,0)
+
+        if print_estimates:
+            print('{:>10}: {:.2f} {:.2f}'.format(region,q,apparent_R))
 
         prediction_dates, pred_cumu_deaths, pred_cumu_deaths_low, \
           pred_cumu_deaths_high, pred_daily_deaths_low, pred_daily_deaths_high \
@@ -236,6 +246,46 @@ def write_JSON(regions, forecast_length=14):
         output[region]['deaths'] = pred_daily_deaths[mttd:]
         output[region]['deaths_low'] = pred_daily_deaths_low[mttd:]
         output[region]['deaths_high'] = pred_daily_deaths_high[mttd:]
+        output[region]['intervention effectiveness'] = q
+        output[region]['intervention effectiveness interval'] = q_interval
         
     with open('forecast.json', 'w') as file:
         json.dump(output, file, cls=NumpyEncoder)
+
+
+def assess_intervention_effectiveness(region, plot_result=False):
+    ifr = 1/100.
+
+    beta = 0.25
+    gamma = 0.05
+
+    N, total_deaths, data_start = retrieve_data(region)
+
+    u0, lag, inferred_data_dates, total_deaths = infer_initial_data(total_deaths,data_start,ifr,gamma,N)
+
+    intervention_start=-lag # Could just set -infinity
+    intervention_length=lag
+    forecast_length=0
+
+    def fit_q(q):
+        prediction_dates, pred_cumu_deaths, pred_cumu_deaths_low, \
+          pred_cumu_deaths_high, pred_daily_deaths_low, pred_daily_deaths_high \
+          = forecast(u0,lag,N,inferred_data_dates,total_deaths,ifr,beta,gamma,q,
+                     intervention_start,intervention_length,forecast_length,False)
+
+        log_daily_deaths = np.log(np.maximum(np.diff(total_deaths)[-lag:],1.e-1))
+        residual = np.linalg.norm(np.log(np.diff(pred_cumu_deaths))-log_daily_deaths)
+        return residual
+
+    q = optimize.fsolve(fit_q,0.)[0]
+
+    if plot_result:
+        prediction_dates, pred_cumu_deaths, pred_cumu_deaths_low, \
+          pred_cumu_deaths_high, pred_daily_deaths_low, pred_daily_deaths_high \
+          = forecast(u0,lag,N,inferred_data_dates,total_deaths,ifr,beta,gamma,q,
+                     intervention_start,intervention_length,forecast_length,False)
+
+        plt.semilogy(prediction_dates[1:],np.diff(pred_cumu_deaths))
+        plt.semilogy(prediction_dates[1:],np.diff(total_deaths[-lag-1:]))
+
+    return q, lag
