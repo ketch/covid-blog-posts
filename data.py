@@ -1,12 +1,30 @@
 import pandas as pd
 import numpy as np
+import json
+import os
+import time
 
 def jhu_data(remote=False):
+    """Fetch data from JHU set on Github and partially parse it.
+
+       Inputs:
+            - remote: if True, pull files from Github.  Otherwise, use local copies.
+
+       Outputs:
+            - cases_df: # of confirmed cases (pandas dataframe)
+            - deaths_df: # of confirmed deaths (pandas dataframe)
+            - data_dates: full range of dates of data (human-readable format)
+    """
     if remote:
         url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv"
     else:
         url = "/Users/ketch/Research/Projects/COVID-19/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv"
-    cases = pd.read_csv(url)
+        # Check that file has been updated today
+        timestamp = os.path.getmtime(url)
+        if (time.time()-timestamp)/3600 > 12:
+            print('Warning: data file is more than 12 hours old.  Please update.')
+
+    cases_df = pd.read_csv(url)
     # No more recovered data:
 #    url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Recovered.csv"
     #recovered = pd.read_csv(url)
@@ -14,27 +32,38 @@ def jhu_data(remote=False):
         url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv"
     else:
         url = "/Users/ketch/Research/Projects/COVID-19/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv"
-    deaths = pd.read_csv(url)
-    today = cases.columns[-1]
-    days = pd.date_range(start='1/22/20',end=today)
-    return cases, deaths, today, days
+    deaths_df = pd.read_csv(url)
+    today = cases_df.columns[-1]
+    data_dates = pd.date_range(start='1/22/20',end=today)
+    return cases_df, deaths_df, data_dates
 
-def load_cases(region):
+def load_time_series(region):
+    """
+    Fetch data and parse to get time series of confirmed cases and deaths.
+    For now, only works with JHU data.
+    """
 
-    cases, deaths, today, days = jhu_data()
+    cases_df, deaths_df, data_dates = jhu_data()
 
-    if region == 'World':
-        rows = list(range(len(cases.index)))
-    elif region in ['Hubei']:
-        rows = cases['Province/State'].isin([region])
-    else:
-        rows = cases['Country/Region'].isin([region])
+    #if region in US_state_population.keys():
+    #    postal_code = us_state_abbrev[region]
+    #    state_str = postal_code+', USA'
+    #    with open('/Users/ketch/Downloads/timeseries-byLocation.json') as file:
+    #        state_data = json.load(file)
+    #    for date in data_dates:
+    #        print(date, state_data[state_str]['dates'][date.strftime('%Y-%-m-%-d')].keys())
+    #    cum_deaths = [state_data[state_str]['dates'][date.strftime('%Y-%-m-%-d')]['deaths_df'] for date in data_dates]
+    #    cum_cases  = [state_data[state_str]['dates'][date.strftime('%Y-%-m-%-d')]['cases_df'] for date in data_dates]
+    #    
+    #else:
+    rows = cases_df['Country/Region'].isin([region])
+    cum_cases = [cases_df[day.strftime('%-m/%-d/%y')][rows].sum() for day in data_dates]
     if not np.any(rows==True):
-        print(region)
+        raise(Exception)
         
-    total_cases = [cases[day.strftime('%-m/%-d/%y')][rows].sum() for day in days]
-    total_deaths = [deaths[day.strftime('%-m/%-d/%y')][rows].sum() for day in days]
-    return np.array(total_cases), np.array(total_deaths)
+    rows = deaths_df['Country/Region'].isin([region])
+    cum_deaths = [deaths_df[day.strftime('%-m/%-d/%y')][rows].sum() for day in data_dates]
+    return data_dates, np.array(cum_cases), np.array(cum_deaths)
 
 population_smallset = {
     'Austria': 8.822e6,
@@ -230,4 +259,118 @@ population = {
     'Vietnam': 97338.58300000001e3,
     'Zambia': 18383.956000000002e3,
     'Zimbabwe': 14862.927e3
+}
+
+US_state_population = {
+    'Alabama': 4903185,
+    'Alaska': 731545,
+    'Arizona': 7278717,
+    'Arkansas': 3017804,
+    'California': 39512223,
+    'Colorado': 5758736,
+    'Connecticut': 3565287,
+    'Delaware': 973764,
+    'District of Columbia': 705749,
+    'Florida': 21477737,
+    'Georgia': 10617423,
+    'Hawaii': 1415872,
+    'Idaho': 1787065,
+    'Illinois': 12671821,
+    'Indiana': 6732219,
+    'Iowa': 3155070,
+    'Kansas': 2913314,
+    'Kentucky': 4467673,
+    'Louisiana': 4648794,
+    'Maine': 1344212,
+    'Maryland': 6045680,
+    'Massachusetts': 6892503,
+    'Michigan': 9986857,
+    'Minnesota': 5639632,
+    'Mississippi': 2976149,
+    'Missouri': 6137428,
+    'Montana': 1068778,
+    'Nebraska': 1934408,
+    'Nevada': 3080156,
+    'New Hampshire': 1359711,
+    'New Jersey': 8882190,
+    'New Mexico': 2096829,
+    'New York': 19453561,
+    'North Carolina': 10488084,
+    'North Dakota': 762062,
+    'Ohio': 11689100,
+    'Oklahoma': 3956971,
+    'Oregon': 4217737,
+    'Pennsylvania': 12801989,
+    'Rhode Island': 1059361,
+    'South Carolina': 5148714,
+    'South Dakota': 884659,
+    'Tennessee': 6829174,
+    'Texas': 28995881,
+    'Utah': 3205958,
+    'Vermont': 623989,
+    'Virginia': 8535519,
+    'Washington': 7614893,
+    'West Virginia': 1792147,
+    'Wisconsin': 5822434,
+    'Wyoming': 578759,
+    'Puerto Rico': 3193694
+}
+
+us_state_abbrev = {
+    'Alabama': 'AL',
+    'Alaska': 'AK',
+    'American Samoa': 'AS',
+    'Arizona': 'AZ',
+    'Arkansas': 'AR',
+    'California': 'CA',
+    'Colorado': 'CO',
+    'Connecticut': 'CT',
+    'Delaware': 'DE',
+    'District of Columbia': 'DC',
+    'Florida': 'FL',
+    'Georgia': 'GA',
+    'Guam': 'GU',
+    'Hawaii': 'HI',
+    'Idaho': 'ID',
+    'Illinois': 'IL',
+    'Indiana': 'IN',
+    'Iowa': 'IA',
+    'Kansas': 'KS',
+    'Kentucky': 'KY',
+    'Louisiana': 'LA',
+    'Maine': 'ME',
+    'Maryland': 'MD',
+    'Massachusetts': 'MA',
+    'Michigan': 'MI',
+    'Minnesota': 'MN',
+    'Mississippi': 'MS',
+    'Missouri': 'MO',
+    'Montana': 'MT',
+    'Nebraska': 'NE',
+    'Nevada': 'NV',
+    'New Hampshire': 'NH',
+    'New Jersey': 'NJ',
+    'New Mexico': 'NM',
+    'New York': 'NY',
+    'North Carolina': 'NC',
+    'North Dakota': 'ND',
+    'Northern Mariana Islands':'MP',
+    'Ohio': 'OH',
+    'Oklahoma': 'OK',
+    'Oregon': 'OR',
+    'Pennsylvania': 'PA',
+    'Puerto Rico': 'PR',
+    'Rhode Island': 'RI',
+    'South Carolina': 'SC',
+    'South Dakota': 'SD',
+    'Tennessee': 'TN',
+    'Texas': 'TX',
+    'Utah': 'UT',
+    'Vermont': 'VT',
+    'Virgin Islands': 'VI',
+    'Virginia': 'VA',
+    'Washington': 'WA',
+    'West Virginia': 'WV',
+    'Wisconsin': 'WI',
+    'Wyoming': 'WY'
 }
