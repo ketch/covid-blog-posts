@@ -210,8 +210,8 @@ def write_JSON(regions, forecast_length=14, print_estimates=False):
 
     output = {}
     ifr = 1/100
-    gamma = 0.08
-    beta = 0.28
+    gamma = 0.05
+    beta = 0.25
 
     for region in regions:
         
@@ -235,14 +235,21 @@ def write_JSON(regions, forecast_length=14, print_estimates=False):
         if print_estimates:
             print('{:>10}: {:.2f} {:.2f}'.format(region,q,apparent_R))
 
+        intervention_length=forecast_length*2
+        intervention_start = -mttd*2
+
         prediction_dates, pred_cumu_deaths, pred_cumu_deaths_low, \
           pred_cumu_deaths_high, pred_daily_deaths_low, pred_daily_deaths_high \
           = forecast(u0,mttd,N,inferred_data_dates,total_deaths,ifr,beta,gamma,
                      q,intervention_start,intervention_length,forecast_length,compute_interval=True)
         
         pred_daily_deaths = np.diff(pred_cumu_deaths);
+
+        from datetime import datetime
+        formatted_dates = [datetime.strftime(dates.num2date(ddd),"%m/%d/%Y") for ddd in prediction_dates[mttd+1:]]
+
         output[region] = {}
-        output[region]['dates'] = prediction_dates[mttd+1:]
+        output[region]['dates'] = formateed_dates
         output[region]['deaths'] = pred_daily_deaths[mttd:]
         output[region]['deaths_low'] = pred_daily_deaths_low[mttd:]
         output[region]['deaths_high'] = pred_daily_deaths_high[mttd:]
