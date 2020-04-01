@@ -1,4 +1,8 @@
-Code for a series of articles about modeling the spread of COVID-19.  See http://www.davidketcheson.info/2020/03/17/SIR_model.html.
+Code for a series of articles about modeling the spread of COVID-19.  See http://www.davidketcheson.info/2020/03/17/SIR_model.html.  If you use this,
+please include links to:
+
+- http://www.davidketcheson.info/2020/03/17/SIR_model.html
+- https://mybinder.org/v2/gh/ketch/covid-blog-posts/master?filepath=Interactive_SIR_model.ipynb
 
 
 
