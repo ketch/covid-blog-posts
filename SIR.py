@@ -7,9 +7,10 @@ from scipy.integrate import solve_ivp
 from IPython.display import Image
 plt.style.use('seaborn-poster')
 matplotlib.rcParams['figure.figsize'] = (10., 6.)
-from data import population, jhu_data, load_cases
+from data import population, jhu_data, load_time_series
 
-cases, deaths, today, days = jhu_data()
+cases, deaths, days = jhu_data()
+today = days[-1]
 
 def compute_IR(total,gamma=0.05):
     """Determine (active) infected and recovered from total (I+R) time series."""
@@ -43,7 +44,7 @@ def SIR_mitigated(region='Italy', start_date=today, beta=0.25, gamma=0.05,\
                   Axis='Linear'):
     """ Model the current outbreak using the SIR model."""
 
-    total_cases, total_deaths = load_cases(region)
+    data_dates, total_cases, total_deaths = load_time_series(region)
     active_confirmed, total_recovered = compute_IR(total_cases)
     confirmed_fraction = confirmed/100.
     N = population[region]
@@ -82,7 +83,7 @@ def SIR_mitigated(region='Italy', start_date=today, beta=0.25, gamma=0.05,\
         scale = 1.
         ylabel = 'Individuals'
     
-    start = dates.datestr2num(start_date)
+    start = dates.datestr2num(str(start_date))
     mydates = np.arange(T)+start
     
     fig = plt.figure(figsize=(12,8))

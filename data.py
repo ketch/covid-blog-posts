@@ -4,7 +4,7 @@ import json
 import os
 import time
 
-def jhu_data(remote=False):
+def jhu_data(remote=True):
     """Fetch data from JHU set on Github and partially parse it.
 
        Inputs:
@@ -18,7 +18,7 @@ def jhu_data(remote=False):
     if remote:
         url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv"
     else:
-        url = "/Users/ketch/Research/Projects/COVID-19/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv"
+        url = "/Users/ketch/Research/Projects/covid-data-sources/JHU_data/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv"
         # Check that file has been updated today
         timestamp = os.path.getmtime(url)
         if (time.time()-timestamp)/3600 > 12:
