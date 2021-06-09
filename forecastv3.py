@@ -42,7 +42,7 @@ def SIR(u0, beta=0.25, gamma=0.05, N = 1, T=14, q=0, intervention_start=0, inter
 
 def forecast(region='Spain',ifr=1,beta=0.25,gamma=0.04,intervention_level='No action',
              intervention_start=0,intervention_length=30,forecast_length=14,scale='linear',
-             plot_type='cumulative',plot_value='deaths'):
+             plot_type='cumulative',plot_value='deaths',plot_past_pred=True,plot_interval=True):
     """Forecast with SIR model.  All times are in days.
 
         Inputs:
@@ -97,44 +97,58 @@ def forecast(region='Spain',ifr=1,beta=0.25,gamma=0.04,intervention_level='No ac
     S_high, I_high, R_high = S_mean.copy(), I_mean.copy(), R_mean.copy()
     dd_low = np.diff(R_mean); dd_high = np.diff(R_mean)
 
-    for dbeta in np.linspace(-0.05,0.05,10):
-        S, I, R= SIR(u0, beta=beta+dbeta, gamma=gamma, N=N, T=mttd+forecast_length, q=q,
-                     intervention_start=intervention_start+mttd,
-                     intervention_length=intervention_length)
-
-        S_low = np.minimum(S_low,S)
-        I_low = np.minimum(I_low,I)
-        R_low = np.minimum(R_low,R)
-        S_high = np.maximum(S_high,S)
-        I_high = np.maximum(I_high,I)
-        R_high = np.maximum(R_high,R)
-        dd_low = np.minimum(dd_low,np.diff(R))
-        dd_high = np.maximum(dd_high,np.diff(R))
-    
     prediction_dates = my_dates[-(mttd+1)]+range(forecast_length+mttd+1)
-
     predicted_deaths = R_mean*ifr
     predicted_deaths = predicted_deaths - (predicted_deaths[mttd]-total_deaths[-1])
-    predicted_deaths_low  = R_low*ifr
-    predicted_deaths_high = R_high*ifr
-    dd_low = dd_low*ifr; dd_high = dd_high*ifr
+
+    if plot_interval:
+        dr_low = np.diff(R_mean); dr_high = np.diff(R_mean)
+        for dbeta in np.linspace(-0.05,0.1,6):
+            for dgamma in np.linspace(-0.02,0.08,6):
+                S, I, R= SIR(u0, beta=beta+dbeta, gamma=gamma+dgamma, N=N, T=mttd+forecast_length, q=q,
+                             intervention_start=intervention_start+mttd,
+                             intervention_length=intervention_length)
+
+                S_low = np.minimum(S_low,S)
+                I_low = np.minimum(I_low,I)
+                R_low = np.minimum(R_low,R)
+                S_high = np.maximum(S_high,S)
+                I_high = np.maximum(I_high,I)
+                R_high = np.maximum(R_high,R)
+                dr_low = np.minimum(dr_low,np.diff(R))
+                dr_high = np.maximum(dr_high,np.diff(R))
+     
+        predicted_deaths_low  = R_low*ifr
+        predicted_deaths_low = predicted_deaths_low - (predicted_deaths_low[mttd]-total_deaths[-1])
+        predicted_deaths_high = R_high*ifr
+        predicted_deaths_high = predicted_deaths_high - (predicted_deaths_high[mttd]-total_deaths[-1])
+
+        dd_low = dd_low*ifr; dd_high = dd_high*ifr
+
+
+    if plot_past_pred: pred_start_ind=0
+    else: pred_start_ind = mttd
 
     if plot_type=='cumulative':
         if plot_value == 'deaths':
             plotfun(my_dates,total_deaths,'-',lw=3,label='Deaths (recorded)')
-            plotfun(prediction_dates[mttd:],predicted_deaths[mttd:],'-k',label='Deaths (predicted)')
-            plt.fill_between(prediction_dates[mttd:],predicted_deaths_low[mttd:],predicted_deaths_high[mttd:],color='grey',zorder=-1)
+            plotfun(prediction_dates[pred_start_ind:],predicted_deaths[pred_start_ind:],'-k',label='Deaths (predicted)')
+            if plot_interval:
+                plt.fill_between(prediction_dates[mttd:],predicted_deaths_low[mttd:],predicted_deaths_high[mttd:],color='grey',zorder=-1)
         elif plot_value == 'hospitalizations':
             plotfun(prediction_dates[mttd:],predicted_deaths[mttd:]*hr,'-k',label='Hospitalizations (predicted)')
-            plt.fill_between(prediction_dates[mttd:],predicted_deaths_low[mttd:]*hr,predicted_deaths_high[mttd:]*hr,color='grey',zorder=-1)
+            if plot_interval:
+                plt.fill_between(prediction_dates[mttd:],predicted_deaths_low[mttd:]*hr,predicted_deaths_high[mttd:]*hr,color='grey',zorder=-1)
     elif plot_type=='daily':
         if plot_value == 'deaths':
             plotfun(my_dates[1:],np.diff(total_deaths),'-',lw=3,label='Deaths (recorded)')
-            plotfun(prediction_dates[mttd+1:],np.diff(predicted_deaths[mttd:]),'-k',label='Deaths (predicted)')
-            plt.fill_between(prediction_dates[mttd+1:],dd_low[mttd:],dd_high[mttd:],color='grey',zorder=-1)
+            plotfun(prediction_dates[pred_start_ind+1:],np.diff(predicted_deaths[pred_start_ind:]),'-k',label='Deaths (predicted)')
+            if plot_interval:
+                plt.fill_between(prediction_dates[mttd+1:],dd_low[mttd:],dd_high[mttd:],color='grey',zorder=-1)
         elif plot_value == 'hospitalizations':
             plotfun(prediction_dates[mttd+1:],np.diff(predicted_deaths[mttd:])*hr,'-k',label='Hospitalizations (predicted)')
-            plt.fill_between(prediction_dates[mttd+1:],dd_low[mttd:]*hr,dd_high[mttd:]*hr,color='grey',zorder=-1)
+            if plot_interval:
+                plt.fill_between(prediction_dates[mttd+1:],dd_low[mttd:]*hr,dd_high[mttd:]*hr,color='grey',zorder=-1)
 
     plt.legend(loc='best')
 
